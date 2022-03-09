@@ -16,3 +16,16 @@ generator/
 main_1.py # usses modela with generator2 with train_loop1
 ..
 ```
+
+## Swin-T based models
+- Setup
+  ```shell
+    #!/usr/bin/bash
+    conda env create -f environment_swinT.yml
+    conda activate swint
+    mkdir weights/
+    cd weights/
+    gdown https://drive.google.com/uc?id=10_ArqSj837hBzoQTq3RPGBZgKbBvNfSe
+    cd ../
+    ```
+- Run files from root directory of this project.
