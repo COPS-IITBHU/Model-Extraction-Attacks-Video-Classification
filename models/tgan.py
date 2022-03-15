@@ -1,3 +1,4 @@
+import pandas as pd
 import torch
 import torch.nn as nn
 import numpy as np
@@ -9,47 +10,108 @@ import torchvision
 from torchvision import transforms
 # !pip install opencv-python-headless
 FRAMES_PER_VIDEO = 16
+from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
-def genSamples(g, n=8):
+
+def genSamples(g,epochsx = 0, n = 8):
     '''
     Generate an n by n grid of videos, given a generator g
     '''
     with torch.no_grad():
-        s = g(torch.rand((n**2, 100), device='cuda')*2-1).cpu().detach().numpy()
-    
+        s = g(torch.rand((n**2, 2000), device='cuda')*2-1).cpu().detach().numpy()
+
     out = np.zeros((3, FRAMES_PER_VIDEO, 64*n, 64*n))
     # print(out.shape)
     for j in range(n):
         for k in range(n):
             out[:, :, 64*j:64*(j+1), 64*k:64*(k+1)] = s[j*n+k, :, :, :, :]
 
-    
     out = out.transpose((1, 2, 3, 0))
     out = (out + 1) / 2 * 255
     out = out.astype(int)
     clip = ImageSequenceClip(list(out), fps=20)
-    clip.write_gif('sample.gif', fps=20)
+    clip.write_gif('gifs/sample'+str(epochsx)+'.gif', fps=20)
+
+
+# ## How to Generate Videos
+# The first thing to note about video generation is that we are now generating tensors with an added dimension. While conventional image methods work to generate tensors in $\mathbb{R}^{C \times H \times W}$, we are now generating tensors of size $\mathbb{R}^{T \times C \times H \times W}$.
+# 
+# To solve this problem, TGAN proposed generating temporal dynamics first, then generating images. Gordon and Parde, 2020 have a visual that summarizes the generator's process.
+# 
+# ![generator](https://imgur.com/vH8cakL.png)
+# 
+# A latent vector $\vec{z}_c$ is sampled from a distribution. This vector is fed into some generic $G_t$ and it transforms the vector into a series of latent temporal vectors. $G_t:\vec{z}_c \mapsto \{\vec{z}_0, \vec{z}_1, \dots, \vec{z}_t\}$ From there each temporal vector is joined with $\vec{z}_c$ and fed into an image generator $G_i$. With all images created, our last step is to concatenate all of the images to form a video. Under this setup we decompose time and the images.
+# 
+# Today we will be trying to represent the UCF101 dataset. This dataset is composed of 101 action classes. Below is a sample of real examples:
+# 
+# ![gif grid](https://imgur.com/9Cp5868.gif)
+# 
+# ## The Temporal Generator $G_t$
+# Here we will be implementing our temporal generator. It transforms a vector in $\mathbb{R}^{100}$ to multiple (16 to be exact) vectors in $\mathbb{R}^{100}$. In TGAN they used a series of transposed 1D convolutions, we will discuss the limitations of this choice later. 
+
+
 
 class TemporalGenerator(nn.Module):
     def __init__(self):
         super().__init__()
         # Create a sequential model to turn one vector into 16
+        
+                # (2000, 1)
+        
         self.model = nn.Sequential(
-            nn.ConvTranspose1d(100, 512, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm1d(512),
+            
+            nn.ConvTranspose1d(2000, 4096, kernel_size=1, stride=1, padding=0),
+            nn.BatchNorm1d(4096),
             nn.ReLU(),
-            nn.ConvTranspose1d(512, 256, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm1d(256),
+            nn.ConvTranspose1d(4096, 2048, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm1d(2048),
             nn.ReLU(),
-            nn.ConvTranspose1d(256, 128, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm1d(128),
+            nn.ConvTranspose1d(2048, 1024, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm1d(1024),
             nn.ReLU(),
-            nn.ConvTranspose1d(128, 128, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm1d(128),
+            nn.ConvTranspose1d(1024, 1024, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm1d(1024),
             nn.ReLU(),
-            nn.ConvTranspose1d(128, 100, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose1d(1024, 2000, kernel_size=4, stride=2, padding=1),
             nn.Tanh()
+            
         )
+        
+#         self.model = nn.Sequential(
+#             nn.ConvTranspose1d(2000, 8192, kernel_size=1, stride=1, padding=0),
+#             nn.BatchNorm1d(8192),
+#             nn.ReLU(),
+#             nn.ConvTranspose1d(8192, 4096, kernel_size=4, stride=2, padding=1),
+#             nn.BatchNorm1d(4096),
+#             nn.ReLU(),
+#             nn.ConvTranspose1d(4096, 2048, kernel_size=4, stride=2, padding=1),
+#             nn.BatchNorm1d(2048),
+#             nn.ReLU(),
+#             nn.ConvTranspose1d(2048, 2048, kernel_size=4, stride=2, padding=1),
+#             nn.BatchNorm1d(2048),
+#             nn.ReLU(),
+#             nn.ConvTranspose1d(2048, 2000, kernel_size=4, stride=2, padding=1),
+#             nn.Tanh()    
+#         )
+        
+        
+        # self.model = nn.Sequential(
+        #     nn.ConvTranspose1d(100, 512, kernel_size=1, stride=1, padding=0),
+        #     nn.BatchNorm1d(512),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose1d(512, 256, kernel_size=4, stride=2, padding=1),
+        #     nn.BatchNorm1d(256),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose1d(256, 128, kernel_size=4, stride=2, padding=1),
+        #     nn.BatchNorm1d(128),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose1d(128, 128, kernel_size=4, stride=2, padding=1),
+        #     nn.BatchNorm1d(128),
+        #     nn.ReLU(),
+        #     nn.ConvTranspose1d(128, 100, kernel_size=4, stride=2, padding=1),
+        #     nn.Tanh()
+        # )
 
         # initialize weights according to paper
         self.model.apply(self.init_weights)
@@ -60,12 +122,15 @@ class TemporalGenerator(nn.Module):
 
     def forward(self, x):
         # reshape x so that it can have convolutions done 
-        x = x.view(-1, 100, 1)
+        x = x.view(-1, 2000, 1)     # 100 -> 2000
         # apply the model and flip the 
         x = self.model(x).transpose(1, 2)
         return x
 
 
+# ## Putting It All Together
+# With our $\vec{z}_c$ generated, and our temporal vectors created, it is time to generate our individual images. The first step is to map the two vectors into appropriate sizes to be fed into a transposed 2D convolutional kernel. This is done by a linear transformation with a nonlinearity. Each newly transformed vector is reshaped to a tensor of $\mathbb{R}^{256 \times 4 \times 4}$. In this shape the two sets of vectors are concatenated across the channel dimension.
+# After the vectors are transformed, reshaped, and concatenated, it's finally time for us to make the images! TGAN ensues with a generic image generator of multiple transposed 2D convolutions. After enough transposed convolutions, batchnorms, and ReLUs, the final two operations are a transposed convolution to 3 color channels and a $\tanh$ activation. Our last step is to alter the shape so that the tensor has time, color-channel, height, and width dimensions. We now have a video!
 
 class VideoGenerator(nn.Module):
     def __init__(self):
@@ -75,18 +140,29 @@ class VideoGenerator(nn.Module):
 
         # create a transformation for the temporal vectors
         self.fast = nn.Sequential(
-            nn.Linear(100, 256 * 4**2, bias=False),
-            nn.BatchNorm1d(256 * 4**2),
+            nn.Linear(2000, 1024 * 4**2, bias=False), # 100 -> 2000
+            nn.BatchNorm1d(1024 * 4**2),             # 256 - 4096
+            nn.ReLU(),
+            nn.Linear(1024 * 4**2, 512 * 4**2, bias=False), # 100 -> 2000
+            nn.BatchNorm1d(512 * 4**2),             # 256 - 4096
+            nn.ReLU(),
+            nn.Linear(512 * 4**2, 256 * 4**2, bias=False), # 100 -> 2000
+            nn.BatchNorm1d(256 * 4**2),             # 256 - 4096
             nn.ReLU()
         )
 
         # create a transformation for the content vector
         self.slow = nn.Sequential(
-            nn.Linear(100, 256 * 4**2, bias=False),
-            nn.BatchNorm1d(256 * 4**2),
+            nn.Linear(2000, 1024 * 4**2, bias=False), # 100 -> 2000
+            nn.BatchNorm1d(1024 * 4**2),             # 256 - 4096
+            nn.ReLU(),
+            nn.Linear(1024 * 4**2, 512 * 4**2, bias=False), # 100 -> 2000
+            nn.BatchNorm1d(512 * 4**2),             # 256 - 4096
+            nn.ReLU(),
+            nn.Linear(512 * 4**2, 256 * 4**2, bias=False), # 100 -> 2000
+            nn.BatchNorm1d(256 * 4**2),             # 256 - 4096
             nn.ReLU()
         )
-
 
         # define the image generator
         self.model = nn.Sequential(
@@ -118,7 +194,7 @@ class VideoGenerator(nn.Module):
     def forward(self, x):
         # pass our latent vector through the temporal generator and reshape
         z_fast = self.temp(x).contiguous()
-        z_fast = z_fast.view(-1, 100)
+        z_fast = z_fast.view(-1, 2000)
 
         # transform the content and temporal vectors 
         z_fast = self.fast(z_fast).view(-1, 256, 4, 4)
@@ -135,6 +211,114 @@ class VideoGenerator(nn.Module):
         return out.view(-1, FRAMES_PER_VIDEO, 3, 64, 64).transpose(1, 2)
 
 
+# def split(a, n):
+#     k, m = divmod(len(a), n)
+#     return (a[i*k+min(i, m):(i+1)*k+min(i+1, m)] for i in range(n))def split(a, n):
+#     k, m = divmod(len(a), n)
+#     return (a[i*k+min(i, m):(i+1)*k+min(i+1, m)] for i in range(n))### The Discriminator
+# 
+# We're no longer operating on images, so now we need to rethink our discriminator. 2D convolutions won't work due to our time dimension, what should we do? TGAN proposes a discriminator composed of a series of 3D convolutions and singular 2D convolution. From one video it produces a single integer.
+# class VideoDiscriminator(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.model3d = nn.Sequential(
+#             nn.Conv3d(3, 64, kernel_size=4, padding=1, stride=2),
+#             nn.LeakyReLU(0.2),
+#             nn.Conv3d(64, 128, kernel_size=4, padding=1, stride=2),
+#             nn.BatchNorm3d(128),
+#             nn.LeakyReLU(0.2),
+#             nn.Conv3d(128, 256, kernel_size=4, padding=1, stride=2),
+#             nn.BatchNorm3d(256),
+#             nn.LeakyReLU(0.2),
+#             nn.Conv3d(256, 512, kernel_size=4, padding=1, stride=2),
+#             nn.BatchNorm3d(512),
+#             nn.LeakyReLU(0.2)
+#         )
+# 
+#         self.conv2d = nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=0)
+# 
+#         # initialize weights according to paper
+#         self.model3d.apply(self.init_weights)
+#         self.init_weights(self.conv2d)
+# 
+#     def init_weights(self, m):
+#         if type(m) == nn.Conv3d or type(m) == nn.Conv2d:
+#             nn.init.xavier_normal_(m.weight, gain=2**0.5)
+# 
+#     def forward(self, x):
+#         h = self.model3d(x)
+#         # turn a tensor of R^NxTxCxHxW into R^NxCxHxW
+#         h = torch.reshape(h, (32, 512, 4, 4))
+#         h = self.conv2d(h)
+#         return h
+# ```python
+# class VideoDiscriminator(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.model3d = nn.Sequential(
+#             nn.Conv3d(3, 64, kernel_size=4, padding=1, stride=2),
+#             nn.LeakyReLU(0.2),
+#             nn.Conv3d(64, 128, kernel_size=4, padding=1, stride=2),
+#             nn.BatchNorm3d(128),
+#             nn.LeakyReLU(0.2),
+#             nn.Conv3d(128, 256, kernel_size=4, padding=1, stride=2),
+#             nn.BatchNorm3d(256),
+#             nn.LeakyReLU(0.2),
+#             nn.Conv3d(256, 512, kernel_size=4, padding=1, stride=2),
+#             nn.BatchNorm3d(512),
+#             nn.LeakyReLU(0.2)
+#         )
+# 
+#         self.conv2d = nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=0)
+# 
+#         # initialize weights according to paper
+#         self.model3d.apply(self.init_weights)
+#         self.init_weights(self.conv2d)
+# 
+#     def init_weights(self, m):
+#         if type(m) == nn.Conv3d or type(m) == nn.Conv2d:
+#             nn.init.xavier_normal_(m.weight, gain=2**0.5)
+# 
+#     def forward(self, x):
+#         h = self.model3d(x)
+#         # turn a tensor of R^NxTxCxHxW into R^NxCxHxW
+#         h = torch.reshape(h, (32, 512, 4, 4))
+#         h = self.conv2d(h)
+#         return h
+# ```
+# Once our discriminator performs inference on some samples the generated integers are then used in the WGAN formulation (you'll learn more about this next week!):
+# 
+# $$\operatorname*{argmax}_D \operatorname*{argmin}_G\mathbb{E}_{x\sim \mathbb{P}_r}[D(x)]-\mathbb{E}_{z\sim p(z)}[D(G(z))]$$
+# 
+# During training this looks like the following.
+# 
+# ```python
+# # update discriminator
+# pr = dis(real)
+# fake = gen(torch.rand((batch_size, 100), device='cuda')*2-1)
+# pf = dis(fake)
+# dis_loss = torch.mean(-pr) + torch.mean(pf)
+# dis_loss.backward()
+# disOpt.step()
+# 
+# # update generator
+# genOpt.zero_grad()
+# fake = gen(torch.rand((batch_size, 100), device='cuda')*2-1)
+# pf = dis(fake)
+# gen_loss = torch.mean(-pf)
+# gen_loss.backward()
+# genOpt.step()
+# ```
+# 
+
+def singular_value_clip(w):
+    dim = w.shape
+    # reshape into matrix if not already MxN
+    if len(dim) > 2:
+        w = w.reshape(dim[0], -1)
+    u, s, v = torch.svd(w, some=True)
+    s[s > 1] = 1
+    return (u @ torch.diag(s) @ v.t()).view(dim)
 
 class VideoDiscriminator(nn.Module):
     def __init__(self):
@@ -201,11 +385,10 @@ dis = VideoDiscriminator().cuda()
 # instantiate the generator, load the weights, and create a sample
 gen = VideoGenerator().cuda()
 
-gen.load_state_dict(torch.load('state_normal81000.ckpt')['model_state_dict'][0])
+# gen.load_state_dict(torch.load('state_normal81000.ckpt')['model_state_dict'][0])
 
-
-
-
+# gen = torch.load('gen1.pt')
+# dis = torch.load('dis.pt')
 
 # genSamples(gen)
 # def display_gif(fn):
@@ -218,14 +401,18 @@ gen.load_state_dict(torch.load('state_normal81000.ckpt')['model_state_dict'][0])
 
 import pandas as pd
 df = pd.read_csv('result400.csv')
-ll = df.iloc[:,1]
+# ll = df.iloc[:,1]
 
 
+# df = pd.read_csv('/home/ug2019/eee/19085023/datafree-model-extraction/dfme/result400.csv')
+ll = sorted(list(df.iloc[:,1].unique()))
+# dic = {}
+# for id, i in enumerate(ll):
+#     dic[i] = id
 
 
-
-ll.tolist()
-ll = set(ll)
+# ll.tolist()
+# ll = set(ll)
 dic = {}
 for id, i in enumerate(ll):
     dic[i] = id
@@ -235,7 +422,7 @@ for id, i in enumerate(ll):
 
 
 
-# import pandas as pd
+import pandas as pd
 import cv2
 import os
 from torch.utils.data import Dataset
@@ -333,38 +520,27 @@ class videosDataset(Dataset):
 
 # pip install opencv-python-headless
 
-
-
-
-
 # path = '217592rSS_c_000004_000014.mp4'
 
 # x = FrameCapture(path)
 
-# # ([17, 360, 360, 3])
-
-
-
-
+# ([17, 360, 360, 3])
 
 # pwd
 
-
-
-
-
-batch_size = 32
-epochs = 5
-gen_lr = 1e-4
-dis_lr = 1e-4
+batch_size = 16
+epochs = 50
+gen_lr = 2e-5
+dis_lr = 2e-5
 device = 'cuda'
+# genSamples(gen, epochsx = 1 + epochs)
 
 # frames per video = 16
 # disOpt = 
 # genOpt = 
 
 csv_file = 'result400.csv'
-root_dir = './'
+root_dir = '/tmp'
 rr = './'
 data = videosDataset(csv_file, rr, transform = None)
 
@@ -395,7 +571,9 @@ len(train_loader)
 # from tqdm.notebook import tqdm
 
 
-
+writer = SummaryWriter(
+    f"runs/GeneratorK400"
+)
 
 
 def train_loop(epochs, gen, dis, videosDataset, gen_lr, dis_lr):
@@ -405,10 +583,13 @@ def train_loop(epochs, gen, dis, videosDataset, gen_lr, dis_lr):
     gen_loss_metric = []
     dis_loss_metric = []
     err = 0
-    for epoch in range(epochs):
+    step = 0
+
+    iteration= 0
+    for epoch in tqdm(range(epochs)):
         losses = []
         # pbar = tqdm(range(len(train_loader), desc="Batch:")
-        for data, targets, frames in (train_loader):
+        for data, targets, frames in tqdm(train_loader):
             
 
             # print(type(real))
@@ -417,62 +598,90 @@ def train_loop(epochs, gen, dis, videosDataset, gen_lr, dis_lr):
             # "real" sequence of imges comes from the dataset
             #  torch.Size([32, 3, 16, 64, 64]) <class 'torch.Tensor'>
             # pr = torch.zeros([32, 3, 16, 64, 64])
-            try:
+            # try:
 
                 
-                data = data.to(device)
-                targets = targets.to(device)
-                pr = dis(data)
-                # print("step 1")
+                            
 
-                fake = gen(torch.rand((batch_size, 100), device='cuda')*2-1)
-                # print(fake.shape, type(fake))
-                #      torch.Size([32, 3, 16, 64, 64]) <class 'torch.Tensor'>
-                # print("step 2")
+            data = data.to(device)
+            targets = targets.to(device)
+            pr = dis(data)
+            # print("step 1")
 
-                pf = dis(fake)
-                # print("step 3")
-                dis_loss = torch.mean(-pr) + torch.mean(pf)
-                disOpt.zero_grad()
-                dis_loss.backward()
-                disOpt.step()
-                # update generator
-                genOpt.zero_grad()
-                fake = gen(torch.rand((batch_size, 100), device='cuda')*2-1)
-                # print("step 4")
-                pf = dis(fake)
-                gen_loss = torch.mean(-pf)
-                gen_loss.backward()
-                genOpt.step()
-                gen_loss_metric.append(gen_loss)
-                dis_loss_metric.append(dis_loss)
-            except:
+            fake = gen(torch.rand((batch_size, 2000), device='cuda')*2-1)
+            # print(fake.shape, type(fake))
+            #      torch.Size([32, 3, 16, 64, 64]) <class 'torch.Tensor'>
+            # print("step 2")
+
+            pf = dis(fake)
+            # print("step 3")
+            dis_loss = torch.mean(-pr) + torch.mean(pf)
+            disOpt.zero_grad()
+            dis_loss.backward()
+            disOpt.step()
+            # update generator
+            genOpt.zero_grad()
+            fake = gen(torch.rand((batch_size, 2000), device='cuda')*2-1)
+            # print("step 4")
+            pf = dis(fake)
+            gen_loss = torch.mean(-pf)
+            gen_loss.backward()
+            genOpt.step()
+            gen_loss_metric.append(gen_loss)
+            dis_loss_metric.append(dis_loss)
+
+            if iteration % 5 == 0:
+                for module in list(dis.model3d.children()) + [dis.conv2d]:
+                    if type(module) == nn.Conv3d or type(module) == nn.Conv2d:
+                        module.weight.data = singular_value_clip(module.weight)
+                    elif type(module) == nn.BatchNorm3d:
+                        gamma = module.weight.data
+                        std = torch.sqrt(module.running_var)
+                        gamma[gamma > std] = std[gamma > std]
+                        gamma[gamma < 0.01 * std] = 0.01 * std[gamma < 0.01 * std]
+                        module.weight.data = gamma
+
+            # except:
                 
-                print('frames found in vid :', frames, flush = True)
-                err=+1
-                
+        #     print('ens', frames, flush = True)
+        #     err=+1
+        # iteration += 1
+
+        if(epoch%1 == 0):
+            genSamples(gen, epochsx = 1 + epoch)
+            torch.save(gen, 'gen' + str(1+epoch) + '.pt')
+            torch.save(dis, 'disc' + str(1+epoch) + '.pt')
+
+        # break
+        
         #     pbar.update(len(data))
         # pbar.close()
         
         print(f"Genrator Loss: {sum(gen_loss_metric)/len(gen_loss_metric)}", flush = True)
         print(f"Discriminator Loss: {sum(dis_loss_metric)/len(dis_loss_metric)}", flush = True)
         
+        writer.add_scalar(
+                    "Genrator Loss", sum(gen_loss_metric)/len(gen_loss_metric), global_step=step
+                )
+        writer.add_scalar(
+                    "Discriminator Loss", sum(dis_loss_metric)/len(dis_loss_metric), global_step=step
+                )
+        step += 1
+        
     return (gen, dis, err, gen_loss_metric, dis_loss_metric)
 
 
+print('training now!')
 
-
-gen2, dis2, errors, lg, ld = train_loop(epochs, gen, dis, videosDataset, gen_lr, dis_lr)
+gen, dis, errors, lg, ld = train_loop(epochs, gen, dis, videosDataset, gen_lr, dis_lr)
 
 
 print('number of errors encountered :', errors)
 print('gen-loss :', lg)
 print('dis-loss :', ld)
 
-torch.save(gen2,'gen.pt')
-torch.save(dis2, 'dis.pt')
-
-
+torch.save(gen,'genf.pt')
+torch.save(dis, 'disf.pt')
 
 
 # ft = np.zeros([17, 3, 360, 360])
@@ -480,6 +689,4 @@ torch.save(dis2, 'dis.pt')
 # ft.shape
 
 
-genSamples(gen2)
-
-
+genSamples(gen)
