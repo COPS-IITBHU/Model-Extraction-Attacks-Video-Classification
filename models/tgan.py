@@ -78,23 +78,7 @@ class TemporalGenerator(nn.Module):
             
         )
         
-#         self.model = nn.Sequential(
-#             nn.ConvTranspose1d(2000, 8192, kernel_size=1, stride=1, padding=0),
-#             nn.BatchNorm1d(8192),
-#             nn.ReLU(),
-#             nn.ConvTranspose1d(8192, 4096, kernel_size=4, stride=2, padding=1),
-#             nn.BatchNorm1d(4096),
-#             nn.ReLU(),
-#             nn.ConvTranspose1d(4096, 2048, kernel_size=4, stride=2, padding=1),
-#             nn.BatchNorm1d(2048),
-#             nn.ReLU(),
-#             nn.ConvTranspose1d(2048, 2048, kernel_size=4, stride=2, padding=1),
-#             nn.BatchNorm1d(2048),
-#             nn.ReLU(),
-#             nn.ConvTranspose1d(2048, 2000, kernel_size=4, stride=2, padding=1),
-#             nn.Tanh()    
-#         )
-        
+
         
         # self.model = nn.Sequential(
         #     nn.ConvTranspose1d(100, 512, kernel_size=1, stride=1, padding=0),
@@ -154,7 +138,7 @@ class VideoGenerator(nn.Module):
         # create a transformation for the content vector
         self.slow = nn.Sequential(
             nn.Linear(2000, 1024 * 4**2, bias=False), # 100 -> 2000
-            nn.BatchNorm1d(1024 * 4**2),             # 256 - 4096
+            nn.BatchNorm1d(1024 * 4**2),             # 256 - 1024
             nn.ReLU(),
             nn.Linear(1024 * 4**2, 512 * 4**2, bias=False), # 100 -> 2000
             nn.BatchNorm1d(512 * 4**2),             # 256 - 4096
@@ -165,6 +149,7 @@ class VideoGenerator(nn.Module):
         )
 
         # define the image generator
+        
         self.model = nn.Sequential(
             nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(256),
@@ -387,8 +372,8 @@ gen = VideoGenerator().cuda()
 
 # gen.load_state_dict(torch.load('state_normal81000.ckpt')['model_state_dict'][0])
 
-# gen = torch.load('gen1.pt')
-# dis = torch.load('dis.pt')
+gen = torch.load('gen5.pt')
+dis = torch.load('disc4.pt')
 
 # genSamples(gen)
 # def display_gif(fn):
@@ -642,18 +627,18 @@ def train_loop(epochs, gen, dis, videosDataset, gen_lr, dis_lr):
                         module.weight.data = gamma
 
             # except:
-                
+
         #     print('ens', frames, flush = True)
         #     err=+1
         # iteration += 1
 
         if(epoch%1 == 0):
             genSamples(gen, epochsx = 1 + epoch)
-            torch.save(gen, 'gen' + str(1+epoch) + '.pt')
-            torch.save(dis, 'disc' + str(1+epoch) + '.pt')
+            torch.save(gen.state_dict(), 'gen' + str(1+epoch) + '.pt')
+            torch.save(dis.state_dict(), 'disc' + str(1+epoch) + '.pt')
 
         # break
-        
+
         #     pbar.update(len(data))
         # pbar.close()
         
