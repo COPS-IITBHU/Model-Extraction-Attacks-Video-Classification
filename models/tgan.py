@@ -196,105 +196,6 @@ class VideoGenerator(nn.Module):
         return out.view(-1, FRAMES_PER_VIDEO, 3, 64, 64).transpose(1, 2)
 
 
-# def split(a, n):
-#     k, m = divmod(len(a), n)
-#     return (a[i*k+min(i, m):(i+1)*k+min(i+1, m)] for i in range(n))def split(a, n):
-#     k, m = divmod(len(a), n)
-#     return (a[i*k+min(i, m):(i+1)*k+min(i+1, m)] for i in range(n))### The Discriminator
-# 
-# We're no longer operating on images, so now we need to rethink our discriminator. 2D convolutions won't work due to our time dimension, what should we do? TGAN proposes a discriminator composed of a series of 3D convolutions and singular 2D convolution. From one video it produces a single integer.
-# class VideoDiscriminator(nn.Module):
-#     def __init__(self):
-#         super().__init__()
-#         self.model3d = nn.Sequential(
-#             nn.Conv3d(3, 64, kernel_size=4, padding=1, stride=2),
-#             nn.LeakyReLU(0.2),
-#             nn.Conv3d(64, 128, kernel_size=4, padding=1, stride=2),
-#             nn.BatchNorm3d(128),
-#             nn.LeakyReLU(0.2),
-#             nn.Conv3d(128, 256, kernel_size=4, padding=1, stride=2),
-#             nn.BatchNorm3d(256),
-#             nn.LeakyReLU(0.2),
-#             nn.Conv3d(256, 512, kernel_size=4, padding=1, stride=2),
-#             nn.BatchNorm3d(512),
-#             nn.LeakyReLU(0.2)
-#         )
-# 
-#         self.conv2d = nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=0)
-# 
-#         # initialize weights according to paper
-#         self.model3d.apply(self.init_weights)
-#         self.init_weights(self.conv2d)
-# 
-#     def init_weights(self, m):
-#         if type(m) == nn.Conv3d or type(m) == nn.Conv2d:
-#             nn.init.xavier_normal_(m.weight, gain=2**0.5)
-# 
-#     def forward(self, x):
-#         h = self.model3d(x)
-#         # turn a tensor of R^NxTxCxHxW into R^NxCxHxW
-#         h = torch.reshape(h, (32, 512, 4, 4))
-#         h = self.conv2d(h)
-#         return h
-# ```python
-# class VideoDiscriminator(nn.Module):
-#     def __init__(self):
-#         super().__init__()
-#         self.model3d = nn.Sequential(
-#             nn.Conv3d(3, 64, kernel_size=4, padding=1, stride=2),
-#             nn.LeakyReLU(0.2),
-#             nn.Conv3d(64, 128, kernel_size=4, padding=1, stride=2),
-#             nn.BatchNorm3d(128),
-#             nn.LeakyReLU(0.2),
-#             nn.Conv3d(128, 256, kernel_size=4, padding=1, stride=2),
-#             nn.BatchNorm3d(256),
-#             nn.LeakyReLU(0.2),
-#             nn.Conv3d(256, 512, kernel_size=4, padding=1, stride=2),
-#             nn.BatchNorm3d(512),
-#             nn.LeakyReLU(0.2)
-#         )
-# 
-#         self.conv2d = nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=0)
-# 
-#         # initialize weights according to paper
-#         self.model3d.apply(self.init_weights)
-#         self.init_weights(self.conv2d)
-# 
-#     def init_weights(self, m):
-#         if type(m) == nn.Conv3d or type(m) == nn.Conv2d:
-#             nn.init.xavier_normal_(m.weight, gain=2**0.5)
-# 
-#     def forward(self, x):
-#         h = self.model3d(x)
-#         # turn a tensor of R^NxTxCxHxW into R^NxCxHxW
-#         h = torch.reshape(h, (32, 512, 4, 4))
-#         h = self.conv2d(h)
-#         return h
-# ```
-# Once our discriminator performs inference on some samples the generated integers are then used in the WGAN formulation (you'll learn more about this next week!):
-# 
-# $$\operatorname*{argmax}_D \operatorname*{argmin}_G\mathbb{E}_{x\sim \mathbb{P}_r}[D(x)]-\mathbb{E}_{z\sim p(z)}[D(G(z))]$$
-# 
-# During training this looks like the following.
-# 
-# ```python
-# # update discriminator
-# pr = dis(real)
-# fake = gen(torch.rand((batch_size, 100), device='cuda')*2-1)
-# pf = dis(fake)
-# dis_loss = torch.mean(-pr) + torch.mean(pf)
-# dis_loss.backward()
-# disOpt.step()
-# 
-# # update generator
-# genOpt.zero_grad()
-# fake = gen(torch.rand((batch_size, 100), device='cuda')*2-1)
-# pf = dis(fake)
-# gen_loss = torch.mean(-pf)
-# gen_loss.backward()
-# genOpt.step()
-# ```
-# 
 
 def singular_value_clip(w):
     dim = w.shape
@@ -343,11 +244,15 @@ class VideoDiscriminator(nn.Module):
         # print(h.shape)
         # print(h.type)
         # turn a tensor of R^NxTxCxHxW into R^NxCxHxW
-        if(h.shape[-1]==22):
+        
+        if(h.shape[-1] == 22):
             h = torch.reshape(h, (-1, 512, 22, 22))
+        
         else:
             h = torch.reshape(h, (-1, 512, 4, 4))
+        
         h = self.conv2d(h)
+        
         return h
 
 
@@ -372,8 +277,8 @@ gen = VideoGenerator().cuda()
 
 # gen.load_state_dict(torch.load('state_normal81000.ckpt')['model_state_dict'][0])
 
-gen = torch.load('gen5.pt')
-dis = torch.load('disc4.pt')
+# gen = torch.load('gen5.pt')
+# dis = torch.load('disc4.pt')
 
 # genSamples(gen)
 # def display_gif(fn):
@@ -456,18 +361,18 @@ def FrameCapture(path):
         
         image = cv2.resize(image, dsize=(360, 360), interpolation=cv2.INTER_AREA)
         
-        frames.append(image)
+        frames.append(Image.fromarray(image[:,:,[2,1,0]]))
     
-    npa = np.asarray(frames)
+    # ft = np.asarray(frames)
     
-    ft = torch.FloatTensor(npa)
+    # ft = torch.FloatTensor(npa)
     
-    # RuntimeError: Given groups=1, weight of size [64, 3, 4, 4, 4], expected input[1, 17, 360, 480, 3] to have 3 channels, but got 17 channels instead
-    x = ft[:16].shape
-    # print('x shape =', x)
-    ft = ft[:16].reshape(x[0], 3, 360, 360)
+    # # RuntimeError: Given groups=1, weight of size [64, 3, 4, 4, 4], expected input[1, 17, 360, 480, 3] to have 3 channels, but got 17 channels instead
+    # x = ft[:16].shape
+    # # print('x shape =', x)
+    # ft = ft[:16].reshape(x[0], 3, 360, 360)
     
-    return (ft, fc)
+    return (frames[:16], fc)
 
 
 class videosDataset(Dataset):
@@ -497,23 +402,18 @@ class videosDataset(Dataset):
         
         return (vid, vid_label, fc)
         
-        
+import torchvideo.transforms as VT
+from torchvision.transforms import Compose
+import torchvision.transforms as IT
 
+transform = Compose([
+    VT.ResizeVideo((64,64), interpolation = 2),
+    # VT.CenterCropVideo((64, 64)),  # (h, w)
+    VT.CollectFrames(),
+    VT.PILVideoToTensor()
+])
 
-
-
-
-# pip install opencv-python-headless
-
-# path = '217592rSS_c_000004_000014.mp4'
-
-# x = FrameCapture(path)
-
-# ([17, 360, 360, 3])
-
-# pwd
-
-batch_size = 16
+batch_size = 64
 epochs = 50
 gen_lr = 2e-5
 dis_lr = 2e-5
@@ -521,13 +421,11 @@ device = 'cuda'
 # genSamples(gen, epochsx = 1 + epochs)
 
 # frames per video = 16
-# disOpt = 
-# genOpt = 
 
 csv_file = 'result400.csv'
 root_dir = '/tmp'
 rr = './'
-data = videosDataset(csv_file, rr, transform = None)
+data = videosDataset(csv_file, rr, transform = transform)
 
 train_loader = DataLoader(dataset = data, batch_size = batch_size, shuffle = True)
 
@@ -583,23 +481,23 @@ def train_loop(epochs, gen, dis, videosDataset, gen_lr, dis_lr):
             # "real" sequence of imges comes from the dataset
             #  torch.Size([32, 3, 16, 64, 64]) <class 'torch.Tensor'>
             # pr = torch.zeros([32, 3, 16, 64, 64])
-            # try:
-
-                
-                            
 
             data = data.to(device)
             targets = targets.to(device)
             pr = dis(data)
+            # print('pr =', pr.shape)
+            # break
             # print("step 1")
 
             fake = gen(torch.rand((batch_size, 2000), device='cuda')*2-1)
             # print(fake.shape, type(fake))
             #      torch.Size([32, 3, 16, 64, 64]) <class 'torch.Tensor'>
             # print("step 2")
-
+            # print(fake.shape)
             pf = dis(fake)
+            # print('pf =', pf.shape)
             # print("step 3")
+            # break
             dis_loss = torch.mean(-pr) + torch.mean(pf)
             disOpt.zero_grad()
             dis_loss.backward()
@@ -608,7 +506,7 @@ def train_loop(epochs, gen, dis, videosDataset, gen_lr, dis_lr):
             genOpt.zero_grad()
             fake = gen(torch.rand((batch_size, 2000), device='cuda')*2-1)
             # print("step 4")
-            pf = dis(fake)
+            pf = (dis(fake))
             gen_loss = torch.mean(-pf)
             gen_loss.backward()
             genOpt.step()
@@ -626,12 +524,6 @@ def train_loop(epochs, gen, dis, videosDataset, gen_lr, dis_lr):
                         gamma[gamma < 0.01 * std] = 0.01 * std[gamma < 0.01 * std]
                         module.weight.data = gamma
 
-            # except:
-
-        #     print('ens', frames, flush = True)
-        #     err=+1
-        # iteration += 1
-
         if(epoch%1 == 0):
             genSamples(gen, epochsx = 1 + epoch)
             torch.save(gen.state_dict(), 'gen' + str(1+epoch) + '.pt')
@@ -641,7 +533,7 @@ def train_loop(epochs, gen, dis, videosDataset, gen_lr, dis_lr):
 
         #     pbar.update(len(data))
         # pbar.close()
-        
+
         print(f"Genrator Loss: {sum(gen_loss_metric)/len(gen_loss_metric)}", flush = True)
         print(f"Discriminator Loss: {sum(dis_loss_metric)/len(dis_loss_metric)}", flush = True)
         
