@@ -1,4 +1,3 @@
-import pandas as pd
 import torch
 import torch.nn as nn
 import numpy as np
@@ -10,6 +9,7 @@ import torchvision
 from torchvision import transforms
 # !pip install opencv-python-headless
 FRAMES_PER_VIDEO = 16
+NOISE_SIZE = 600
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
@@ -19,7 +19,7 @@ def genSamples(g,epochsx = 0, n = 8):
     Generate an n by n grid of videos, given a generator g
     '''
     with torch.no_grad():
-        s = g(torch.rand((n**2, 2000), device='cuda')*2-1).cpu().detach().numpy()
+        s = g(torch.rand((n**2, NOISE_SIZE), device='cuda')*2-1).cpu().detach().numpy()
 
     out = np.zeros((3, FRAMES_PER_VIDEO, 64*n, 64*n))
     # print(out.shape)
@@ -61,19 +61,19 @@ class TemporalGenerator(nn.Module):
         
         self.model = nn.Sequential(
             
-            nn.ConvTranspose1d(2000, 4096, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm1d(4096),
-            nn.ReLU(),
-            nn.ConvTranspose1d(4096, 2048, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose1d(NOISE_SIZE, 2048, kernel_size=1, stride=1, padding=0),
             nn.BatchNorm1d(2048),
             nn.ReLU(),
             nn.ConvTranspose1d(2048, 1024, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm1d(1024),
             nn.ReLU(),
-            nn.ConvTranspose1d(1024, 1024, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm1d(1024),
+            nn.ConvTranspose1d(1024, 768, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm1d(768),
             nn.ReLU(),
-            nn.ConvTranspose1d(1024, 2000, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose1d(768, 768, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm1d(768),
+            nn.ReLU(),
+            nn.ConvTranspose1d(768, NOISE_SIZE, kernel_size=4, stride=2, padding=1),
             nn.Tanh()
             
         )
@@ -106,7 +106,7 @@ class TemporalGenerator(nn.Module):
 
     def forward(self, x):
         # reshape x so that it can have convolutions done 
-        x = x.view(-1, 2000, 1)     # 100 -> 2000
+        x = x.view(-1, NOISE_SIZE, 1)     # 100 -> 2000
         # apply the model and flip the 
         x = self.model(x).transpose(1, 2)
         return x
@@ -124,7 +124,7 @@ class VideoGenerator(nn.Module):
 
         # create a transformation for the temporal vectors
         self.fast = nn.Sequential(
-            nn.Linear(2000, 1024 * 4**2, bias=False), # 100 -> 2000
+            nn.Linear(NOISE_SIZE, 1024 * 4**2, bias=False), # 100 -> 2000
             nn.BatchNorm1d(1024 * 4**2),             # 256 - 4096
             nn.ReLU(),
             nn.Linear(1024 * 4**2, 512 * 4**2, bias=False), # 100 -> 2000
@@ -137,7 +137,7 @@ class VideoGenerator(nn.Module):
 
         # create a transformation for the content vector
         self.slow = nn.Sequential(
-            nn.Linear(2000, 1024 * 4**2, bias=False), # 100 -> 2000
+            nn.Linear(NOISE_SIZE, 1024 * 4**2, bias=False), # 100 -> 2000
             nn.BatchNorm1d(1024 * 4**2),             # 256 - 1024
             nn.ReLU(),
             nn.Linear(1024 * 4**2, 512 * 4**2, bias=False), # 100 -> 2000
@@ -179,7 +179,7 @@ class VideoGenerator(nn.Module):
     def forward(self, x):
         # pass our latent vector through the temporal generator and reshape
         z_fast = self.temp(x).contiguous()
-        z_fast = z_fast.view(-1, 2000)
+        z_fast = z_fast.view(-1, NOISE_SIZE)
 
         # transform the content and temporal vectors 
         z_fast = self.fast(z_fast).view(-1, 256, 4, 4)
@@ -235,9 +235,9 @@ class VideoDiscriminator(nn.Module):
 
     def forward(self, x):
         # print('x-before :', x.shape)
-        sh = x.shape
-        if(sh[1] == 16):
-            x = x.permute(0, 2, 1, 3, 4)
+        # sh = x.shape
+        # if(sh[1] == 16):
+        #     x = x.permute(0, 2, 1, 3, 4)
         # print('x in c3d:',x.shape)
         # print(x.type)
         h = self.model3d(x)
@@ -245,34 +245,19 @@ class VideoDiscriminator(nn.Module):
         # print(h.type)
         # turn a tensor of R^NxTxCxHxW into R^NxCxHxW
         
-        if(h.shape[-1] == 22):
-            h = torch.reshape(h, (-1, 512, 22, 22))
+        #if(h.shape[-1] == 22):
+        #    h = torch.reshape(h, (-1, 512, 22, 22))
         
-        else:
-            h = torch.reshape(h, (-1, 512, 4, 4))
+        #else:
+        h = torch.reshape(h, (-1, 512, 4, 4))
         
         h = self.conv2d(h)
         
         return h
 
-
-
-
-
-
-
-
-
 dis = VideoDiscriminator().cuda()
 
 
-# This model took 16 hours to train on an RTX-2080ti, so we'll use a pretrained version to explore the results.
-# 
-# Note: Make sure to use a GPU runtime!
-
-
-
-# instantiate the generator, load the weights, and create a sample
 gen = VideoGenerator().cuda()
 
 # gen.load_state_dict(torch.load('state_normal81000.ckpt')['model_state_dict'][0])
@@ -281,6 +266,7 @@ gen = VideoGenerator().cuda()
 # dis = torch.load('disc4.pt')
 
 # genSamples(gen)
+
 # def display_gif(fn):
 #     from IPython import display
 #     return display.HTML('<img src="{}">'.format(fn))
@@ -291,22 +277,11 @@ gen = VideoGenerator().cuda()
 
 import pandas as pd
 df = pd.read_csv('result400.csv')
-# ll = df.iloc[:,1]
 
-
-# df = pd.read_csv('/home/ug2019/eee/19085023/datafree-model-extraction/dfme/result400.csv')
 ll = sorted(list(df.iloc[:,1].unique()))
-# dic = {}
-# for id, i in enumerate(ll):
-#     dic[i] = id
-
-
-# ll.tolist()
-# ll = set(ll)
 dic = {}
 for id, i in enumerate(ll):
     dic[i] = id
-# dic
 
 
 
@@ -358,8 +333,14 @@ def FrameCapture(path):
     for i in range(0, fc, (fc-1)//15):
         
         image = frems[i]
+        # print(image.shape)
+        # image = cv2.resize(image, dsize=(360, 360), interpolation=cv2.INTER_AREA)
         
-        image = cv2.resize(image, dsize=(360, 360), interpolation=cv2.INTER_AREA)
+        ma = max(image.shape[1], image.shape[0])
+        h, w = image.shape[0], image.shape[1]
+        
+        image = cv2.copyMakeBorder(image, (ma - h) // 2, (ma-h)//2, (ma-w)//2, (ma-w)//2, cv2.BORDER_CONSTANT, value=[0,0,0])
+        # print('img.sh', image.shape)
         
         frames.append(Image.fromarray(image[:,:,[2,1,0]]))
     
@@ -410,24 +391,32 @@ transform = Compose([
     VT.ResizeVideo((64,64), interpolation = 2),
     # VT.CenterCropVideo((64, 64)),  # (h, w)
     VT.CollectFrames(),
-    VT.PILVideoToTensor()
+    VT.PILVideoToTensor(),
+    VT.NormalizeVideo(
+        mean = [0.45, 0.45, 0.45],
+        std = [0.5, 0.5, 0.5], 
+        channel_dim = 0, 
+        inplace = True
+    )
 ])
 
-batch_size = 64
+batch_size = 96
 epochs = 50
 gen_lr = 2e-5
 dis_lr = 2e-5
 device = 'cuda'
-# genSamples(gen, epochsx = 1 + epochs)
+
+genSamples(gen, epochsx = 100)
+
 
 # frames per video = 16
 
 csv_file = 'result400.csv'
 root_dir = '/tmp'
 rr = './'
-data = videosDataset(csv_file, rr, transform = transform)
+dataload = videosDataset(csv_file, rr, transform = transform)
 
-train_loader = DataLoader(dataset = data, batch_size = batch_size, shuffle = True)
+train_loader = DataLoader(dataset = dataload, batch_size = batch_size, shuffle = True)
 
 
 
@@ -471,46 +460,30 @@ def train_loop(epochs, gen, dis, videosDataset, gen_lr, dis_lr):
     iteration= 0
     for epoch in tqdm(range(epochs)):
         losses = []
-        # pbar = tqdm(range(len(train_loader), desc="Batch:")
         for data, targets, frames in tqdm(train_loader):
             
-
-            # print(type(real))
-            # out_g = gen()
-            # update discriminator
-            # "real" sequence of imges comes from the dataset
-            #  torch.Size([32, 3, 16, 64, 64]) <class 'torch.Tensor'>
-            # pr = torch.zeros([32, 3, 16, 64, 64])
-
+            
+            
             data = data.to(device)
             targets = targets.to(device)
             pr = dis(data)
-            # print('pr =', pr.shape)
-            # break
-            # print("step 1")
 
-            fake = gen(torch.rand((batch_size, 2000), device='cuda')*2-1)
-            # print(fake.shape, type(fake))
-            #      torch.Size([32, 3, 16, 64, 64]) <class 'torch.Tensor'>
-            # print("step 2")
-            # print(fake.shape)
+            fake = gen(torch.rand((batch_size, NOISE_SIZE), device='cuda')*2-1)
             pf = dis(fake)
-            # print('pf =', pf.shape)
-            # print("step 3")
-            # break
             dis_loss = torch.mean(-pr) + torch.mean(pf)
             disOpt.zero_grad()
             dis_loss.backward()
             disOpt.step()
+            
             # update generator
             genOpt.zero_grad()
-            fake = gen(torch.rand((batch_size, 2000), device='cuda')*2-1)
-            # print("step 4")
+            fake = gen(torch.rand((batch_size, NOISE_SIZE), device='cuda')*2-1)
             pf = (dis(fake))
             gen_loss = torch.mean(-pf)
             gen_loss.backward()
             genOpt.step()
             gen_loss_metric.append(gen_loss)
+            
             dis_loss_metric.append(dis_loss)
 
             if iteration % 5 == 0:
@@ -526,13 +499,9 @@ def train_loop(epochs, gen, dis, videosDataset, gen_lr, dis_lr):
 
         if(epoch%1 == 0):
             genSamples(gen, epochsx = 1 + epoch)
-            torch.save(gen.state_dict(), 'gen' + str(1+epoch) + '.pt')
-            torch.save(dis.state_dict(), 'disc' + str(1+epoch) + '.pt')
+            torch.save(gen.state_dict(), 'gen.pt')
+            torch.save(dis.state_dict(), 'disc.pt')
 
-        # break
-
-        #     pbar.update(len(data))
-        # pbar.close()
 
         print(f"Genrator Loss: {sum(gen_loss_metric)/len(gen_loss_metric)}", flush = True)
         print(f"Discriminator Loss: {sum(dis_loss_metric)/len(dis_loss_metric)}", flush = True)
@@ -559,11 +528,6 @@ print('dis-loss :', ld)
 
 torch.save(gen,'genf.pt')
 torch.save(dis, 'disf.pt')
-
-
-# ft = np.zeros([17, 3, 360, 360])
-# ft = ft[:16]
-# ft.shape
 
 
 genSamples(gen)
