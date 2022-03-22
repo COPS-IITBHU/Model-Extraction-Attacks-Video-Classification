@@ -29,3 +29,6 @@ main_1.py # usses modela with generator2 with train_loop1
     cd ../
     ```
 - Run files from root directory of this project.
+
+## References
+ViViT - https://arxiv.org/abs/2103.15691
