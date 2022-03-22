@@ -32,3 +32,4 @@ main_1.py # usses modela with generator2 with train_loop1
 
 ## References
 ViViT - https://arxiv.org/abs/2103.15691
+MoviNet - https://arxiv.org/pdf/2103.11511v2.pdf
