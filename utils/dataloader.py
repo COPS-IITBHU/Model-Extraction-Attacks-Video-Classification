@@ -1,5 +1,5 @@
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 import pandas as pd
 import os
 import cv2
