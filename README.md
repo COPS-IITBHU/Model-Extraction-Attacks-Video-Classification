@@ -29,10 +29,10 @@ main_1.py # usses modela with generator2 with train_loop1
     conda activate swint
     mkdir weights/
     cd weights/
-    <!-- SwinT weights -->
+    #SwinT weights
     gdown https://drive.google.com/uc?id=10_ArqSj837hBzoQTq3RPGBZgKbBvNfSe
 
-    <!-- MoviNetA2 weights -->
+    #MoviNetA2 weights
     gdown --id 12jpmoKb1wfF0Mpq7IeLbeoHLtJ1YaoDV
 
     cd ../
