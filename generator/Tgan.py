@@ -2,7 +2,6 @@ import math
 from PIL import Image
 from torch.utils.data import Dataset
 import cv2
-from pytorch_lightning.lite import LightningLite
 import os
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -177,7 +176,7 @@ class VideoDiscriminator(nn.Module):
         return h
 
     def constrain(self):
-        for module in list(self..children()):
+        for module in list(self.children()):
             if type(module) == nn.Conv3d or type(module) == nn.Conv2d:
                 module.weight.data = singular_value_clip(module.weight)
             elif type(module) == nn.BatchNorm3d:
