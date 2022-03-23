@@ -87,11 +87,10 @@ csv_file = "result.csv"
 root_dir = "/"
 rr = root_dir
 train_data = videosDataset(csv_file, rr, transform=transform_swint)
-# test_data = videosDataset(
-#     "test.csv", rr, transform=transform_swint)
+test_data = videosDataset("test.csv", rr, transform=transform_swint)
 
-test_data = videosDataset(
-    "validation.csv", rr, transform=transform_swint)
+# test_data = videosDataset(
+#     "validation.csv", rr, transform=transform_swint)
 
 
 writer = SummaryWriter("runs_GB")
@@ -117,79 +116,79 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, betas=(
     0.9, 0.999), eps=1e-8, weight_decay=0.02,)
 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=7)
 
-# step = -1
-# best_acc = 0
-# batches_per_epoch = 100
-# for epoch in tqdm(range(epochs)):
-#     step += 1
-#     itr = 0 
+step = -1
+best_acc = 0
+batches_per_epoch = 100
+for epoch in tqdm(range(epochs)):
+    step += 1
+    itr = 0 
     
-#     # Train
-#     losses2 = []
-#     correct_victim  = 0
-#     for image, label in tqdm(train_loader):
-#         if (itr == batches_per_epoch):
-#             break
-#         itr += 1
-#         label = label.cuda()
-#         image = image.to(device, non_blocking=True)
-#         img = image.permute(0, 2, 1, 3, 4)
-#         out = model(img)
-#         del img
-#         # hello bye
-#         with torch.no_grad():
-#             target = teacher(image)
-#             pred = target.argmax(dim=1)
-#         del image
-#         correct_victim += pred.eq(label.view_as(pred)).sum().item()
-#         loss = loss_func(out, pred)
-#         del out, pred, label 
-#         optimizer.zero_grad(set_to_none=True)
-#         loss.backward()
-#         optimizer.step()
-#         losses.append(loss)
-#         losses2.append(loss)
-#     lr_scheduler.step()
-#     print('Victim accuracy : {}'.format(100*correct_victim/batches_per_epoch/batch_size))
-#     writer.add_scalar("Victim accuracy ",(100*correct_victim/batches_per_epoch/batch_size), global_step=step)
+    # Train
+    losses2 = []
+    correct_victim  = 0
+    for image, label in tqdm(train_loader):
+        if (itr == batches_per_epoch):
+            break
+        itr += 1
+        label = label.cuda()
+        image = image.to(device, non_blocking=True)
+        img = image.permute(0, 2, 1, 3, 4)
+        out = model(img)
+        del img
+        # hello bye
+        with torch.no_grad():
+            target = teacher(image)
+            pred = target.argmax(dim=1)
+        del image
+        correct_victim += pred.eq(label.view_as(pred)).sum().item()
+        loss = loss_func(out, pred)
+        del out, pred, label 
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+        losses.append(loss)
+        losses2.append(loss)
+    lr_scheduler.step()
+    print('Victim accuracy : {}'.format(100*correct_victim/batches_per_epoch/batch_size))
+    writer.add_scalar("Victim accuracy ",(100*correct_victim/batches_per_epoch/batch_size), global_step=step)
     
-#     # Test
-#     correct = 0
-#     test_loss = 0
-#     with torch.no_grad():
-#         for data, target in test_loader:
-#             data, target = data.to(device), target.to(device)
-#             output = model(data.permute(0, 2, 1, 3, 4))
-#             pred = output.argmax(dim=1)
-#             test_loss += F.cross_entropy(output,target, reduction='sum').item()
-#             correct += pred.eq(target.view_as(pred)).sum().item()
-#         accuracy = 100. * correct / len(test_loader.dataset)
-#         print('\nTest set: Accuracy: {}/{} ({:.4f}%)\n'.format(correct,
-#               len(test_loader.dataset), accuracy))
+    # Test
+    correct = 0
+    test_loss = 0
+    with torch.no_grad():
+        for data, target in test_loader:
+            data, target = data.to(device), target.to(device)
+            output = model(data.permute(0, 2, 1, 3, 4))
+            pred = output.argmax(dim=1)
+            test_loss += F.cross_entropy(output,target, reduction='sum').item()
+            correct += pred.eq(target.view_as(pred)).sum().item()
+        accuracy = 100. * correct / len(test_loader.dataset)
+        print('\nTest set: Accuracy: {}/{} ({:.4f}%)\n'.format(correct,
+              len(test_loader.dataset), accuracy))
        
-#         print('loss at epoch =', epoch, sum(losses2)/(len(losses2)))
+        print('loss at epoch =', epoch, sum(losses2)/(len(losses2)))
 
 
-#     writer.add_scalar("Loss against victim", sum(
-#         losses2)/(len(losses2)), global_step=step)
-#     writer.add_scalar("Test Loss", test_loss, global_step=step)
-#     writer.add_scalar("Test Acc", accuracy, global_step=step)
-#     if(accuracy > best_acc):
-#         torch.save(model.state_dict(), 'weights/vivit_swint.pth')
-#         best_acc = accuracy
+    writer.add_scalar("Loss against victim", sum(
+        losses2)/(len(losses2)), global_step=step)
+    writer.add_scalar("Test Loss", test_loss, global_step=step)
+    writer.add_scalar("Test Acc", accuracy, global_step=step)
+    if(accuracy > best_acc):
+        torch.save(model.state_dict(), 'weights/vivit_swint.pth')
+        best_acc = accuracy
     
-# print('loss till epoch=', epoch, sum(losses)/(len(losses)))
+print('loss till epoch=', epoch, sum(losses)/(len(losses)))
 
-# Test
-correct = 0
-test_loss = 0
-with torch.no_grad():
-    for data, target in tqdm(test_loader):
-        data, target = data.to(device), target.to(device)
-        output = model(data.permute(0, 2, 1, 3, 4))
-        pred = output.argmax(dim=1)
-        test_loss += F.cross_entropy(output,target, reduction='sum').item()
-        correct += pred.eq(target.view_as(pred)).sum().item()
-    accuracy = 100. * correct / len(test_loader.dataset)
-    print('\nTest set: Accuracy: {}/{} ({:.4f}%)\n'.format(correct,
-          len(test_loader.dataset), accuracy))
+# # Validation Test
+# correct = 0
+# test_loss = 0
+# with torch.no_grad():
+#     for data, target in tqdm(test_loader):
+#         data, target = data.to(device), target.to(device)
+#         output = model(data.permute(0, 2, 1, 3, 4))
+#         pred = output.argmax(dim=1)
+#         test_loss += F.cross_entropy(output,target, reduction='sum').item()
+#         correct += pred.eq(target.view_as(pred)).sum().item()
+#     accuracy = 100. * correct / len(test_loader.dataset)
+#     print('\nTest set: Accuracy: {}/{} ({:.4f}%)\n'.format(correct,
+#           len(test_loader.dataset), accuracy))
