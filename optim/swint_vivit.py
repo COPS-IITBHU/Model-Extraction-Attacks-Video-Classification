@@ -16,7 +16,7 @@ from approximate_gradients import *
 from gan import VideoGenerator
 from my_utils import *
 from swint_victim import SwinTransformer3D as VICTIM
-from vivitpytorch.vivit import *
+from models.ViViT import *
 import config_args
 
 os.environ["CUDA_VISIBLE_DEVICES"] = config_args.cuda_device
@@ -193,67 +193,6 @@ def compute_grad_norms(generator, student):
             S_grad.append(p.grad.norm().to("cpu"))
     return np.mean(G_grad), np.mean(S_grad)
 
-
-# transform = torchvision.transforms.Compose([
-#     torchvision.transforms.Resize(224),
-#     torchvision.transforms.CenterCrop(224),
-#     torchvision.transforms.Normalize(
-#         mean=[123.675, 116.28, 103.53],
-#         std=[58.395, 57.12, 57.375]
-#     ),
-# ])
-
-# transform_movinetA2 = torchvision.transforms.Compose([
-#     torchvision.transforms.Resize((200, 200)),
-#     # torchvision.transforms.RandomHorizontalFlip(),
-#     torchvision.transforms.RandomCrop((172, 172)),
-# ])
-
-# # def video2img(video_path):
-# #     vidcap = cv2.VideoCapture(video_path)
-# #     success, image = vidcap.read()
-# #     count = 0
-# #     l = []
-# #     while success:
-# #         if count % 20 == 0:
-# #             l.append(
-# #                 transform(
-# #                     torch.tensor(image).type(
-# #                         torch.FloatTensor).permute(2, 0, 1)
-# #                 ).unsqueeze(dim=0)
-# #             )
-# #         success, image = vidcap.read()
-# #         count += 1
-# #     return torch.stack(l, dim=2)
-
-# df = pd.read_csv('/DATA/shorya/experiment/datafree-model-extraction/dfme/result600.csv')
-# ll = sorted(list(df.iloc[:, 0].unique()))
-# dic = {}
-# for id, i in enumerate(ll):
-#     dic[i] = id
-
-
-# def video2img(video_path, transform=transform_movinetA2):
-#     vidcap = cv2.VideoCapture(video_path)
-#     success, image = vidcap.read()
-#     l = []
-#     fc = 0
-#     frems = []
-#     while success:
-#         frems.append(image)
-#         success, image = vidcap.read()
-#     fc = len(frems)
-#     for i in range(0, fc, (fc - 1) // 15):
-#         image = frems[i]
-#         # print(image.shape)
-#         l.append(
-#             transform(
-#                 torch.tensor(image).type(
-#                     torch.FloatTensor).permute(2, 0, 1)
-#             ).unsqueeze(dim=0)
-#         )
-    
-#     return torch.stack(l[:16], dim=2)
 
 
 def singlevideotest(model, video_path):

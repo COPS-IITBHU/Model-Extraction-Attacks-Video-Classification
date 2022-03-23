@@ -1,0 +1,6 @@
+README.md
+setup.py
+vidmodex.egg-info/PKG-INFO
+vidmodex.egg-info/SOURCES.txt
+vidmodex.egg-info/dependency_links.txt
+vidmodex.egg-info/top_level.txt
