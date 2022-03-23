@@ -177,11 +177,7 @@ class VideoDiscriminator(nn.Module):
 
 # dataset directary csv
 
-df = pd.read_csv('result400.csv')
-ll = sorted(list(df.iloc[:,1].unique()))
-dic = {}
-for id, i in enumerate(ll):
-    dic[i] = id
+
 
 
 # Function to extract frames
@@ -234,6 +230,12 @@ class videosDataset(Dataset):
 
         self.transform = transform
 
+        df = pd.read_csv(csv_file)
+        ll = sorted(list(df.iloc[:,1].unique()))
+        self.dic = {}
+        for id, i in enumerate(ll):
+            self.dic[i] = id
+
     def __len__(self):
         return len(self.annotations)
 
@@ -241,7 +243,7 @@ class videosDataset(Dataset):
         vid_path = os.path.join(
             self.root_dir, (self.annotations.iloc[index, 0]))
         # print(vid_path)
-        vid_label = torch.tensor(dic[self.annotations.iloc[index, 1]])
+        vid_label = torch.tensor(self.dic[self.annotations.iloc[index, 1]])
         # put the labels into a dictionary?
 
         vid, fc = FrameCapture(vid_path)
