@@ -9,7 +9,8 @@ setuptools.setup(
     author="Somnath Kumar",
     author_email="hexplex0xff@gmail.com",
     description="Code for Model Extration for Video Classification for Kinetics 400/600 trained model",
-#    long_description=long_description,
+   # long_description=long_description,
     url="https://github.com/hex-plex/vidmodex",
     packages=setuptools.find_packages(),
+    install_requires=['mmaction2','timm','tqdm','torch','moviepy']
 )
