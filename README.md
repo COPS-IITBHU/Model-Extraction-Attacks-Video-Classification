@@ -1,4 +1,4 @@
-# BLACKBOX
+# Model Extraction Attacks Video Classification
 
 ## Installation
 
