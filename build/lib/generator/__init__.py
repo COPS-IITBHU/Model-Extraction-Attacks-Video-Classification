@@ -1,1 +1,0 @@
-from generator.Tgan import VideoGenerator as Tgan
