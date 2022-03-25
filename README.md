@@ -1,5 +1,9 @@
 # Model Extraction Attacks Video Classification
 
+## End to End Approach
+
+![](media/end_to_end.png)
+
 ## Installation
 
 ```bash
@@ -62,5 +66,16 @@ main_file.py           ## Contains your custom config/data
 
 ## References
 
-ViViT - https://arxiv.org/abs/2103.15691
-MoviNet - https://arxiv.org/pdf/2103.11511v2.pdf
+[[1]](#1) **ViViT: A Video Vision Transformer** [https://arxiv.org/abs/2103.15691] [cs.CV] 1 Nov 2021
+
+[[2]](#2) **MoViNets: Mobile Video Networks for Efficient Video Recognition** [https://arxiv.org/abs/2103.11511] [cs.CV] 18 Apr 2021
+
+[[3]](#3) **Swin Transformer: Hierarchical Vision Transformer using Shifted Windows** [https://arxiv.org/abs/2103.14030] [cs.CV] 17 Aug 2021
+
+[[4]](#4) **Temporal Generative Adversarial Nets with Singular Value Clipping** [https://arxiv.org/abs/1611.06624] [cs.LG] 18 Aug 2017
+
+[[5]](#5) **Data-Free Model Extraction** [https://arxiv.org/abs/2011.14779] [cs.LG] 31 Mar 2021
+
+[[6]](#6) **MAZE: Data-Free Model Stealing Attack Using Zeroth-Order Gradient Estimation** [https://arxiv.org/abs/2005.03161] [stat.ML] 6 May 2020
+
+[[7]](#7) **Robustness and Diversity Seeking Data-Free Knowledge Distillation** [https://arxiv.org/abs/2011.03749] [cs.LG] 10 Feb 2021 
