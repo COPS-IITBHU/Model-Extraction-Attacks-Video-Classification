@@ -12,7 +12,7 @@ $ pip install git+https://github.com/hex-plex/Model-Extraction-Attacks-Video-Cla
 ```
 
 ## Usage
-Simple snippet explaining the usage
+Simple snippet explaining the usage :
 
 ### BlackBox Extraction
 ```python
